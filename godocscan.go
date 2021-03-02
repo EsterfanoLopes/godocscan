@@ -9,7 +9,13 @@ import (
 
 const (
 	// Regex_ddMMMyyyy to RG document dates
-	Regex_ddMMMyyyy = `(([0-9])|([0-2][0-9])|([3][0-1]))\/(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\/\d{4}`
+	Regex_ddMMMyyyy = `(?m)(([0-9])|([0-2][0-9])|([3][0-1]))\/(JAN|FEV|MAR|ABR|MAI|JUN|JUL|AGO|SET|OUT|NOV|DEZ)\/\d{4}`
+
+	// Regex_CPF to CPF document number
+	Regex_CPF = `(?m)^\d{3}.?\d{3}.?\d{3}-?\d{2}`
+
+	// Regex_RG to RG document number
+	Regex_RG = `(?m)(^\d{1,2}).?(\d{3}).?(\d{3})-?(\d{1,2}|X|x$)`
 )
 
 func Setup(language string) (client *gosseract.Client, err error) {
@@ -31,6 +37,7 @@ type RegistroGeral struct {
 	Number    string
 	IssueDate string
 	BirthDate string
+	CpfNumber string
 	Raw       string
 }
 
@@ -71,13 +78,53 @@ func (rg *RegistroGeral) ScanRaw() (err error) {
 	return
 }
 
+func (rg *RegistroGeral) ScanCPF() (err error) {
+	text, err := rg.Client.Text()
+	if err != nil {
+		return
+	}
+
+	result := rg.matchCpfNumber(text)
+
+	if len(result) > 0 {
+		rg.CpfNumber = result[0]
+	}
+
+	return
+}
+
+func (rg *RegistroGeral) ScanRgNumber() (err error) {
+	text, err := rg.Client.Text()
+	if err != nil {
+		return
+	}
+
+	result := rg.matchRgNumber(text)
+
+	if len(result) > 0 {
+		rg.Number = result[0]
+	}
+
+	return
+}
+
 func (rg *RegistroGeral) ScanAll() (err error) {
 	err = rg.ScanRaw()
 	if err != nil {
 		return err
 	}
 
-	rg.ScanDates()
+	err = rg.ScanDates()
+	if err != nil {
+		return err
+	}
+
+	err = rg.ScanCPF()
+	if err != nil {
+		return err
+	}
+
+	err = rg.ScanRgNumber()
 	if err != nil {
 		return err
 	}
@@ -86,9 +133,15 @@ func (rg *RegistroGeral) ScanAll() (err error) {
 }
 
 func (rg *RegistroGeral) matchDate(text string) []string {
-	re := regexp.MustCompile(Regex_ddMMMyyyy)
+	return regexp.MustCompile(Regex_ddMMMyyyy).FindAllString(text, -1)
+}
 
-	return re.FindAllString(text, -1)
+func (rg *RegistroGeral) matchCpfNumber(text string) []string {
+	return regexp.MustCompile(Regex_CPF).FindAllString(text, -1)
+}
+
+func (rg *RegistroGeral) matchRgNumber(text string) []string {
+	return regexp.MustCompile(Regex_RG).FindAllString(text, -1)
 }
 
 func main() {
